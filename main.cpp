@@ -4,6 +4,7 @@
 #include <boost/multi_array.hpp>
 #include <fstream>
 #include <mutex>
+#include "gnuplot-iostream.h"
 
 namespace po = boost::program_options;
 
@@ -21,10 +22,10 @@ void update(int x, int y, double *u1, double *u2, double delta_t, double delta_y
 int main(int argc, char *argv[]) {
     int commsize, rank, numprocesses;
 
-    MPI_Init(&argc,&argv);
-    MPI_Comm_size(MPI_COMM_WORLD,&commsize);
-    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-    numprocesses = commsize-1;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &commsize);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    numprocesses = commsize - 1;
 
     if (rank == 0) {
         std::string conf_file;
@@ -70,7 +71,7 @@ int main(int argc, char *argv[]) {
         typedef boost::multi_array<double, 2> array_type;
         array_type A(boost::extents[y][x]);
 
-        std::ifstream matrix_file {"../matrix.txt"};
+        std::ifstream matrix_file{"../matrix.txt"};
         if (!matrix_file.is_open()) return -1;
 
         for (int i = 0; i < y; i++) {
@@ -122,10 +123,26 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < iter / save_step; i++) {
             offset = 0;
             for (int j = 1; j <= numprocesses; j++) {
-                MPI_Recv(&A[offset][0], rows_process[j-1] * x, MPI_DOUBLE, j, 3, MPI_COMM_WORLD, &status);
-                offset += rows_process[j-1];
+                MPI_Recv(&A[offset][0], rows_process[j - 1] * x, MPI_DOUBLE, j, 3, MPI_COMM_WORLD, &status);
+                offset += rows_process[j - 1];
             }
+            double frame[20][20];
+            for (int i = 0; i < y; i++) {
+                for (int j = 0; j < x; j++) {
+                    frame[i][j] = A[i][j];
+                }
+            }
+            Gnuplot gp;
+            gp << "set terminal pngcairo size 750,460\n";
+            gp << "set output \"../img/heat" << i << ".png\"\n";
+            gp << "set title \"Heat Map\" \n";
+//            gp << "set autoscale fix\n";
+            gp << "set palette defined (0 0 0 0.5, 1 0 0 1, 2 0 0.5 1, 3 0 1 1, 4 0.5 1 0.5, 5 1 1 0, 6 1 0.5 0, 7 1 0 0, 8 0.5 0 0)\n";
+            gp << "set pm3d map\n";
+            gp << "splot '-'\n";
 
+            gp.send2d(frame);
+            gp.flush();
             // SAVE IMAGE HERE
         }
 
@@ -189,8 +206,8 @@ int main(int argc, char *argv[]) {
 
         for (int i = 0; i < iter; i++) {
             if (rank != numprocesses) {
-                MPI_Sendrecv(&Ai[new_rows-2][0], x, MPI_DOUBLE, rank + 1, 1,
-                             &Ai[new_rows-1][0], x, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, &status);
+                MPI_Sendrecv(&Ai[new_rows - 2][0], x, MPI_DOUBLE, rank + 1, 1,
+                             &Ai[new_rows - 1][0], x, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, &status);
             }
             if (rank != 1) {
                 MPI_Sendrecv(&Ai[1][0], x, MPI_DOUBLE, rank - 1, 1,
