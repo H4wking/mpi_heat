@@ -130,6 +130,31 @@ int main(int argc, char *argv[]) {
             MPI_Recv(&Ai[1][0], rows * x, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
         }
 
+//        usleep(10000 * rank);
+//
+//        std::cout << rank << std::endl;
+//
+//        for (int i = 0; i < rows; i++) {
+//            for (int j = 0; j < x; j++) {
+//                std::cout << Ai[i][j] << " ";
+//            }
+//            std::cout << std::endl;
+//        }
+//
+//
+//        std::cout << std::endl;
+
+        for (int i = 0; i < 1; i++) {
+            if (rank != numprocesses) {
+                MPI_Sendrecv(&Ai[rows-2][0], x, MPI_DOUBLE, rank + 1, 1,
+                             &Ai[rows-1][0], x, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, &status);
+            }
+            if (rank != 1) {
+                MPI_Sendrecv(&Ai[1][0], x, MPI_DOUBLE, rank - 1, 1,
+                             &Ai[0][0], x, MPI_DOUBLE, rank - 1, 1, MPI_COMM_WORLD, &status);
+            }
+        }
+
         usleep(10000 * rank);
 
         std::cout << rank << std::endl;
@@ -143,8 +168,10 @@ int main(int argc, char *argv[]) {
 
 
         std::cout << std::endl;
+
+
         MPI_Finalize();
     }
-    
+
     return 0;
 }
