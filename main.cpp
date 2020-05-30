@@ -7,7 +7,16 @@
 
 namespace po = boost::program_options;
 
-std::mutex m;
+void update(int x, int y, double *u1, double *u2, double delta_t, double delta_y, double delta_x, double alpha) {
+    int ix, iy;
+    for (iy = 1; iy < y - 1; iy++)
+        for (ix = 1; ix < x - 1; ix++)
+            *(u2 + iy * x + ix) = *(u1 + iy * x + ix) + delta_t * alpha * (
+                    (*(u1 + (iy + 1) * x + ix) + *(u1 + (iy - 1) * x + ix) - 2.0 * *(u1 + iy * x + ix)) /
+                    std::pow(delta_x, 2) +
+                    (*(u1 + iy * x + ix + 1) + *(u1 + iy * x + ix - 1) - 2.0 * *(u1 + iy * x + ix)) /
+                    std::pow(delta_y, 2));
+}
 
 int main(int argc, char *argv[]) {
     int commsize, rank, numprocesses;
@@ -144,7 +153,15 @@ int main(int argc, char *argv[]) {
 //
 //        std::cout << std::endl;
 
-        for (int i = 0; i < 1; i++) {
+        array_type Aj(boost::extents[rows][x]);
+
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < x; j++) {
+                Aj[i][j] = Ai[i][j];
+            }
+        }
+
+        for (int i = 0; i < iter; i++) {
             if (rank != numprocesses) {
                 MPI_Sendrecv(&Ai[rows-2][0], x, MPI_DOUBLE, rank + 1, 1,
                              &Ai[rows-1][0], x, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, &status);
@@ -153,6 +170,8 @@ int main(int argc, char *argv[]) {
                 MPI_Sendrecv(&Ai[1][0], x, MPI_DOUBLE, rank - 1, 1,
                              &Ai[0][0], x, MPI_DOUBLE, rank - 1, 1, MPI_COMM_WORLD, &status);
             }
+            update(x, rows, &Ai[0][0], &Aj[0][0], delta_t, 1, 1, alpha);
+            swap(Ai, Aj);
         }
 
         usleep(10000 * rank);
