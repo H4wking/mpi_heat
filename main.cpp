@@ -1,9 +1,13 @@
 #include <iostream>
 #include <mpi.h>
 #include <boost/program_options.hpp>
+#include <boost/multi_array.hpp>
 #include <fstream>
+#include <mutex>
 
 namespace po = boost::program_options;
+
+std::mutex m;
 
 int main(int argc, char *argv[]) {
     int commsize, rank, numprocesses;
@@ -28,8 +32,8 @@ int main(int argc, char *argv[]) {
             exit(2);
         }
 
-        double cap, conduct, dens;
-        int x, y, delta_x, delta_y, delta_t, iter, save_step;
+        double cap, conduct, dens, delta_t;
+        int x, y, delta_x, delta_y, iter, save_step;
 
         po::options_description config_parser;
         config_parser.add_options()
@@ -40,34 +44,107 @@ int main(int argc, char *argv[]) {
                 ("y", po::value<int>(&y))
                 ("delta_x", po::value<int>(&delta_x)->default_value(1))
                 ("delta_y", po::value<int>(&delta_y)->default_value(1))
-                ("delta_t", po::value<int>(&delta_t))
+                ("delta_t", po::value<double>(&delta_t))
                 ("iterations", po::value<int>(&iter))
                 ("save_step", po::value<int>(&save_step));
         po::variables_map vm;
         store(parse_config_file(conf, config_parser), vm);
         notify(vm);
 
-        double alpha = conduct / (dens * cap);
+        typedef boost::multi_array<double, 2> array_type;
+        array_type A(boost::extents[y][x]);
 
-        for (int i = 0; i <= 3; i++) {
-            MPI_Send(&alpha, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+        std::ifstream matrix_file {"../matrix.txt"};
+        if (!matrix_file.is_open()) return -1;
+
+        for (int i = 0; i < y; i++) {
+            for (int j = 0; j < x; j++) {
+                matrix_file >> A[i][j];
+            }
         }
 
-        std::cout << alpha << std::endl;
+//        for (int i = 0; i < y; i++) {
+//            for (int j = 0; j < x; j++) {
+//                std::cout << A[i][j] << " ";
+//            }
+//            std::cout << std::endl;
+//        }
+
+        double alpha = conduct / (dens * cap);
+
+        int avrows = y / numprocesses;
+        int extra = y % numprocesses;
+
+        int rows;
+        int offset = 0;
+
+        for (int i = 1; i <= numprocesses; i++) {
+            rows = (i <= extra) ? avrows + 1 : avrows;
+
+//            if (i == 1 || i == numprocesses) {
+//                rows++;
+//            } else {
+//                rows += 2;
+//            }
+
+            MPI_Send(&alpha, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&x, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&rows, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&delta_t, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&iter, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&save_step, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&A[offset][0], rows * x, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+
+            offset += rows;
+        }
+
+//        std::cout << alpha << std::endl;
         MPI_Finalize();
     }
 
     if (rank != 0) {
-        double alpha;
+        double alpha, delta_t;
+        int x, rows, iter, save_step;
         MPI_Status status;
 
         MPI_Recv(&alpha, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&x, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&rows, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&delta_t, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&iter, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&save_step, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
 
-        std::cout << rank << " " << alpha << std::endl;
+        typedef boost::multi_array<double, 2> array_type;
+
+        if (rank == 1 || rank == numprocesses) {
+            rows++;
+        } else {
+            rows += 2;
+        }
+
+        array_type Ai(boost::extents[rows][x]);
+
+        if (rank == 1) {
+            MPI_Recv(&Ai[0][0], rows * x, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+        } else {
+            MPI_Recv(&Ai[1][0], rows * x, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+        }
+
+        usleep(10000 * rank);
+
+        std::cout << rank << std::endl;
+
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < x; j++) {
+                std::cout << Ai[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+
+
+        std::cout << std::endl;
         MPI_Finalize();
     }
-
-
-
+    
     return 0;
 }
