@@ -41,8 +41,8 @@ int main(int argc, char *argv[]) {
             exit(2);
         }
 
-        double cap, conduct, dens, delta_t;
-        int x, y, delta_x, delta_y, iter, save_step;
+        double cap, conduct, dens, delta_t, delta_x, delta_y;
+        int x, y, iter, save_step;
 
         po::options_description config_parser;
         config_parser.add_options()
@@ -51,8 +51,8 @@ int main(int argc, char *argv[]) {
                 ("density", po::value<double>(&dens))
                 ("x", po::value<int>(&x))
                 ("y", po::value<int>(&y))
-                ("delta_x", po::value<int>(&delta_x)->default_value(1))
-                ("delta_y", po::value<int>(&delta_y)->default_value(1))
+                ("delta_x", po::value<double>(&delta_x)->default_value(0.1))
+                ("delta_y", po::value<double>(&delta_y)->default_value(0.1))
                 ("delta_t", po::value<double>(&delta_t))
                 ("iterations", po::value<int>(&iter))
                 ("save_step", po::value<int>(&save_step));
@@ -107,6 +107,8 @@ int main(int argc, char *argv[]) {
             MPI_Send(&alpha, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
             MPI_Send(&x, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
             MPI_Send(&rows, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&delta_x, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&delta_y, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
             MPI_Send(&delta_t, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
             MPI_Send(&iter, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
             MPI_Send(&save_step, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
@@ -131,13 +133,15 @@ int main(int argc, char *argv[]) {
     }
 
     if (rank != 0) {
-        double alpha, delta_t;
+        double alpha, delta_t, delta_x, delta_y;
         int x, rows, iter, save_step;
         MPI_Status status;
 
         MPI_Recv(&alpha, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
         MPI_Recv(&x, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
         MPI_Recv(&rows, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&delta_x, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&delta_y, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
         MPI_Recv(&delta_t, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
         MPI_Recv(&iter, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
         MPI_Recv(&save_step, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
@@ -193,7 +197,7 @@ int main(int argc, char *argv[]) {
                              &Ai[0][0], x, MPI_DOUBLE, rank - 1, 1, MPI_COMM_WORLD, &status);
             }
 
-            update(x, new_rows, &Ai[0][0], &Aj[0][0], delta_t, 1, 1, alpha);
+            update(x, new_rows, &Ai[0][0], &Aj[0][0], delta_t, delta_y, delta_x, alpha);
 
             if (i % save_step == 0) {
                 if (rank == 1) {
@@ -206,19 +210,18 @@ int main(int argc, char *argv[]) {
             swap(Ai, Aj);
         }
 
-//        usleep(10000 * rank);
-//
-//        std::cout << rank << std::endl;
-//
-//        for (int i = 0; i < new_rows; i++) {
-//            for (int j = 0; j < x; j++) {
-//                std::cout << Ai[i][j] << " ";
-//            }
-//            std::cout << std::endl;
-//        }
-//
-//
-//        std::cout << std::endl;
+        usleep(10000 * rank);
+
+        std::cout << rank << std::endl;
+
+        for (int i = 0; i < new_rows; i++) {
+            for (int j = 0; j < x; j++) {
+                std::cout << Ai[i][j] << " ";
+            }
+            std::cout << std::endl;
+        }
+
+        std::cout << std::endl;
 
 
         MPI_Finalize();
