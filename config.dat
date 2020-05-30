@@ -1,0 +1,10 @@
+capacity = 449
+conductivity = 92
+density = 7.874
+x = 10
+y = 10
+delta_x = 1
+delta_y = 1
+delta_t = 1
+iterations = 100
+save_step = 10
