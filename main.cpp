@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
     if (rank == 0) {
         std::string conf_file;
         if (argc == 1) {
-            conf_file = "config.dat";
+            conf_file = "../config.dat";
         } else if (argc == 2) {
             conf_file = argv[1];
         }
@@ -33,8 +33,8 @@ int main(int argc, char *argv[]) {
 
         po::options_description config_parser;
         config_parser.add_options()
-                ("capacity", po::value<double>(&cap))
-                ("conductivity", po::value<double>(&conduct))
+                ("heat_capacity", po::value<double>(&cap))
+                ("thermal_conductivity", po::value<double>(&conduct))
                 ("density", po::value<double>(&dens))
                 ("x", po::value<int>(&x))
                 ("y", po::value<int>(&y))

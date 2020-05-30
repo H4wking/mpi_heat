@@ -1,6 +1,6 @@
-capacity = 449
-conductivity = 92
-density = 7.874
+heat_capacity = 460         # Теплоємність заліза = 460 (Дж / кг * K)
+thermal_conductivity = 70   # Теплопровідність заліза = 70 (Вт/ м * К)
+density = 7800              # Густина заліза = 7800 (Кг/м^3)
 x = 10
 y = 10
 delta_x = 1
