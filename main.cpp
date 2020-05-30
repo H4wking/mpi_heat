@@ -60,6 +60,13 @@ int main(int argc, char *argv[]) {
         store(parse_config_file(conf, config_parser), vm);
         notify(vm);
 
+        double alpha = conduct / (dens * cap);
+
+        if (std::pow(std::max(delta_x, delta_y), 2) / (4 * alpha) < delta_t) {
+            std::cerr << "Von Neumann stability analysis.\n";
+            exit(2);
+        }
+
         typedef boost::multi_array<double, 2> array_type;
         array_type A(boost::extents[y][x]);
 
@@ -79,16 +86,17 @@ int main(int argc, char *argv[]) {
 //            std::cout << std::endl;
 //        }
 
-        double alpha = conduct / (dens * cap);
-
         int avrows = y / numprocesses;
         int extra = y % numprocesses;
 
         int rows;
         int offset = 0;
 
+        std::vector<int> rows_process;
+
         for (int i = 1; i <= numprocesses; i++) {
             rows = (i <= extra) ? avrows + 1 : avrows;
+            rows_process.push_back(rows);
 
 //            if (i == 1 || i == numprocesses) {
 //                rows++;
@@ -107,7 +115,18 @@ int main(int argc, char *argv[]) {
             offset += rows;
         }
 
-//        std::cout << alpha << std::endl;
+        MPI_Status status;
+
+        for (int i = 0; i < iter / save_step; i++) {
+            offset = 0;
+            for (int j = 1; j <= numprocesses; j++) {
+                MPI_Recv(&A[offset][0], rows_process[j-1] * x, MPI_DOUBLE, j, 3, MPI_COMM_WORLD, &status);
+                offset += rows_process[j-1];
+            }
+
+            // SAVE IMAGE HERE
+        }
+
         MPI_Finalize();
     }
 
@@ -125,13 +144,16 @@ int main(int argc, char *argv[]) {
 
         typedef boost::multi_array<double, 2> array_type;
 
-        if (rank == 1 || rank == numprocesses) {
-            rows++;
-        } else {
-            rows += 2;
+        int new_rows = rows;
+        if (numprocesses != 1) {
+            if (rank == 1 || rank == numprocesses) {
+                new_rows++;
+            } else {
+                new_rows += 2;
+            }
         }
 
-        array_type Ai(boost::extents[rows][x]);
+        array_type Ai(boost::extents[new_rows][x]);
 
         if (rank == 1) {
             MPI_Recv(&Ai[0][0], rows * x, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
@@ -153,9 +175,9 @@ int main(int argc, char *argv[]) {
 //
 //        std::cout << std::endl;
 
-        array_type Aj(boost::extents[rows][x]);
+        array_type Aj(boost::extents[new_rows][x]);
 
-        for (int i = 0; i < rows; i++) {
+        for (int i = 0; i < new_rows; i++) {
             for (int j = 0; j < x; j++) {
                 Aj[i][j] = Ai[i][j];
             }
@@ -163,30 +185,40 @@ int main(int argc, char *argv[]) {
 
         for (int i = 0; i < iter; i++) {
             if (rank != numprocesses) {
-                MPI_Sendrecv(&Ai[rows-2][0], x, MPI_DOUBLE, rank + 1, 1,
-                             &Ai[rows-1][0], x, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, &status);
+                MPI_Sendrecv(&Ai[new_rows-2][0], x, MPI_DOUBLE, rank + 1, 1,
+                             &Ai[new_rows-1][0], x, MPI_DOUBLE, rank + 1, 1, MPI_COMM_WORLD, &status);
             }
             if (rank != 1) {
                 MPI_Sendrecv(&Ai[1][0], x, MPI_DOUBLE, rank - 1, 1,
                              &Ai[0][0], x, MPI_DOUBLE, rank - 1, 1, MPI_COMM_WORLD, &status);
             }
-            update(x, rows, &Ai[0][0], &Aj[0][0], delta_t, 1, 1, alpha);
+
+            update(x, new_rows, &Ai[0][0], &Aj[0][0], delta_t, 1, 1, alpha);
+
+            if (i % save_step == 0) {
+                if (rank == 1) {
+                    MPI_Send(&Ai[0][0], rows * x, MPI_DOUBLE, 0, 3, MPI_COMM_WORLD);
+                } else {
+                    MPI_Send(&Ai[1][0], rows * x, MPI_DOUBLE, 0, 3, MPI_COMM_WORLD);
+                }
+            }
+
             swap(Ai, Aj);
         }
 
-        usleep(10000 * rank);
-
-        std::cout << rank << std::endl;
-
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < x; j++) {
-                std::cout << Ai[i][j] << " ";
-            }
-            std::cout << std::endl;
-        }
-
-
-        std::cout << std::endl;
+//        usleep(10000 * rank);
+//
+//        std::cout << rank << std::endl;
+//
+//        for (int i = 0; i < new_rows; i++) {
+//            for (int j = 0; j < x; j++) {
+//                std::cout << Ai[i][j] << " ";
+//            }
+//            std::cout << std::endl;
+//        }
+//
+//
+//        std::cout << std::endl;
 
 
         MPI_Finalize();
