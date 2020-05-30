@@ -47,12 +47,23 @@ int main(int argc, char *argv[]) {
         store(parse_config_file(conf, config_parser), vm);
         notify(vm);
 
-        std::cout << cap << std::endl;
+        double alpha = conduct / (dens * cap);
+
+        for (int i = 0; i <= 3; i++) {
+            MPI_Send(&alpha, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+        }
+
+        std::cout << alpha << std::endl;
         MPI_Finalize();
     }
 
     if (rank != 0) {
-        std::cout << rank << std::endl;
+        double alpha;
+        MPI_Status status;
+
+        MPI_Recv(&alpha, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+
+        std::cout << rank << " " << alpha << std::endl;
         MPI_Finalize();
     }
 
