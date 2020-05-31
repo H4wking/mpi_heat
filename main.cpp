@@ -143,12 +143,12 @@ int main(int argc, char *argv[]) {
             image.type(Magick::TrueColorType);
             for (size_t row = 0; row < x; ++row) {
                 for (size_t col = 0; col < y; ++col) {
-                    image.pixelColor(col, row, colors(A[row][col], 0., 10.));
+                    image.pixelColor(col, row, colors(A[row][col], 0., 100.));
                 }
             }
 
-            // Write the image to a file - change extension if you want a GIF or JPEG
-            image.write(path + std::to_string(i) + ".bmp");
+            image.scale(Magick::Geometry(x * 10, y * 10));
+            image.write(path + std::to_string(i) + ".jpg");
             // SAVE IMAGE HERE
         }
 

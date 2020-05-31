@@ -1,10 +1,10 @@
 heat_capacity = 460         # Теплоємність заліза = 460 (Дж / кг * K)
 thermal_conductivity = 70   # Теплопровідність заліза = 70 (Вт/ м * К)
 density = 7800              # Густина заліза = 7800 (Кг/м^3)
-x = 20
-y = 20
-delta_x = 0.01
-delta_y = 0.01
-delta_t = 1
-iterations = 100
+x = 50
+y = 50
+delta_x = 0.001
+delta_y = 0.001
+delta_t = 0.01
+iterations = 1000
 save_step = 10
