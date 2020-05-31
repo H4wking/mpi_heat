@@ -4,9 +4,19 @@
 #include <boost/multi_array.hpp>
 #include <fstream>
 #include <mutex>
-#include "gnuplot-iostream.h"
+#include <Magick++.h>
 
 namespace po = boost::program_options;
+
+template<typename T>
+Magick::ColorRGB colors(const T &value, const T &min_val, const T &max_val) {
+    double red, green, blue;
+    double ratio = 2 * static_cast<double>(value - min_val) / (max_val - min_val);
+    blue = std::max(0., 1 - ratio);
+    red = std::max(0., ratio - 1);
+    green = 1 - blue - red;
+    return Magick::ColorRGB(red, green, blue);
+}
 
 void update(int x, int y, double *u1, double *u2, double delta_t, double delta_y, double delta_x, double alpha) {
     int ix, iy;
@@ -94,7 +104,7 @@ int main(int argc, char *argv[]) {
         int offset = 0;
 
         std::vector<int> rows_process;
-
+        std::string path  = "../img/heat";
         for (int i = 1; i <= numprocesses; i++) {
             rows = (i <= extra) ? avrows + 1 : avrows;
             rows_process.push_back(rows);
@@ -120,29 +130,25 @@ int main(int argc, char *argv[]) {
 
         MPI_Status status;
 
-        for (int i = 0; i < iter / save_step; i++) {
+        for (int i = 0; i < ceil(static_cast<double>(iter) / save_step); i++){
             offset = 0;
             for (int j = 1; j <= numprocesses; j++) {
                 MPI_Recv(&A[offset][0], rows_process[j - 1] * x, MPI_DOUBLE, j, 3, MPI_COMM_WORLD, &status);
                 offset += rows_process[j - 1];
             }
-            double frame[20][20];
-            for (int i = 0; i < y; i++) {
-                for (int j = 0; j < x; j++) {
-                    frame[i][j] = A[i][j];
+            Magick::InitializeMagick(*argv);
+
+            // Create Image object and read in from pixel data above
+            Magick::Image image(Magick::Geometry(x, y), "white");
+            image.type(Magick::TrueColorType);
+            for (size_t row = 0; row < x; ++row) {
+                for (size_t col = 0; col < y; ++col) {
+                    image.pixelColor(col, row, colors(A[row][col], 0., 10.));
                 }
             }
-            Gnuplot gp;
-            gp << "set terminal pngcairo size 750,460\n";
-            gp << "set output \"../img/heat" << i << ".png\"\n";
-            gp << "set title \"Heat Map\" \n";
-//            gp << "set autoscale fix\n";
-            gp << "set palette defined (0 0 0 0.5, 1 0 0 1, 2 0 0.5 1, 3 0 1 1, 4 0.5 1 0.5, 5 1 1 0, 6 1 0.5 0, 7 1 0 0, 8 0.5 0 0)\n";
-            gp << "set pm3d map\n";
-            gp << "splot '-'\n";
 
-            gp.send2d(frame);
-            gp.flush();
+            // Write the image to a file - change extension if you want a GIF or JPEG
+            image.write(path + std::to_string(i) + ".bmp");
             // SAVE IMAGE HERE
         }
 
